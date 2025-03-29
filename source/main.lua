@@ -31,7 +31,6 @@ playerX, playerY = initPlayerTileX * 32 - 16, initPlayerTileY * 32 - 16
 gfx.setDrawOffset(-playerX + 200, -playerY + 120)
 
 local playerSprite = gfx.image.new("Images/mazzy.png")
-
 local player = gfx.sprite.new(playerSprite)
 
 player:add()
@@ -39,12 +38,58 @@ player:add()
 -- Import the tileset
 local tilesheet = gfx.imagetable.new("Images/doubletime")
 
-local currentLevel = 1
+local currentLevel = 2
 
 -- Create an empty tilemap
 local tilemap = {}
 
+local darknessSprite = nil
+
+function createDarknessSprite()
+	local width, height = 400, 240 -- Playdate screen size
+	local radius = 60
+
+	-- Make an image that’s solid black
+	local img = gfx.image.new(width, height)
+	gfx.pushContext(img)
+	gfx.setColor(gfx.kColorBlack)
+	gfx.fillRect(0, 0, width, height)
+
+	-- Cut out a transparent circle in the center
+	gfx.setColor(gfx.kColorClear)
+	gfx.fillCircleAtPoint(width / 2, height / 2, radius)
+	gfx.popContext()
+
+	-- Create sprite
+	darknessSprite = gfx.sprite.new(img)
+	darknessSprite:setCenter(0, 0)
+	darknessSprite:moveTo(0, 0)
+	darknessSprite:setZIndex(1000) -- above the tilemap and player
+	darknessSprite:add()
+	darknessSprite:setIgnoresDrawOffset(false)
+	darknessSprite:setVisible(false)
+end
+
+local darknessTimer = 0
+local darknessThreshold = levels[currentLevel].darkTime[1] or 70000
+local isDark = false
+
+local torchActive = false
+local torchDuration = 5000 -- 5 seconds of light
+local torchEndTime = 0
+
 function buildLevel(level)
+	-- Clear previous level sprites
+	gfx.sprite.removeAll()
+	tilemap = {}
+
+	player:add()
+	createDarknessSprite()
+
+	darknessTimer = 0
+	darknessThreshold = level.darkTime[1] or 70000
+	isDark = false
+
 	local tilesetKeyTranslation = {
 		walls = 844,
 		torches = 191,
@@ -103,22 +148,48 @@ function isValueInTable(value, table)
 	return false
 end
 
-function playerIsNotBlocked(x, y, direction)
-	-- Convert pixel coordinates to tile coordinates
-	local tileX = (math.floor(x / 32)) + 1
-	local tileY = (math.floor(y / 32)) + 1
+function isWall(tileIndex)
+	return isValueInTable(tileIndex, levels[currentLevel].walls)
+end
 
-	print("--- TARGET ---")
-	print(tileX)
-	print("---")
-	print(tileY)
-	print("---")
+function isEntrance(tileIndex)
+	return isValueInTable(tileIndex, levels[currentLevel].entrance)
+end
 
-	-- print(isValueInTable(((tileY - 1) * 15 + tileX) - 1, levels[currentLevel].walls))
+function playerIsNotBlocked(x, y)
+	local tileX = math.floor(x / 32) + 1
+	local tileY = math.floor(y / 32) + 1
+	local tileIndex = (tileY - 1) * 15 + tileX - 1
 
-	-- print(isValueInTable((tyleY - 1) * 15 + tileX, levels[currentLevel].walls))
+	if isEntrance(tileIndex) then
+		return false
+	end
 
-	return not isValueInTable(((tileY - 1) * 15 + tileX) - 1, levels[currentLevel].walls)
+	if isWall(tileIndex) then
+		if inventory.ladders > 0 then
+			-- Use a ladder to scale the wall
+			inventory.ladders = inventory.ladders - 1
+			print("Climbed over wall using a ladder!")
+
+			tilemap[tileIndex + 1] = 295 -- ladder tile ID
+			tm:setTiles(tilemap, 15)
+
+			for i, v in ipairs(levels[currentLevel].walls) do
+				if v == tileIndex then
+					table.remove(levels[currentLevel].walls, i)
+					break
+				end
+			end
+
+			return true
+		else
+			-- Wall, no ladder = blocked
+			return false
+		end
+	end
+
+	-- Not a wall or entrance — it's fine!
+	return true
 end
 
 function checkPickupAt(tileIndex, type)
@@ -148,21 +219,38 @@ function checkPickupAt(tileIndex, type)
 	end
 end
 
-function pd.update()
-	gfx.setDrawOffset(-player.x + 200, -player.y + 120)
+function checkHole(tileIndex)
+	local holes = levels[currentLevel].holes
 
-	local targetX, targetY = playerX, playerY -- Store the target coordinates
+	for i, v in ipairs(holes) do
+		if v == tileIndex then
+			if inventory.planks > 0 then
+				-- Use a plank!
+				inventory.planks = inventory.planks - 1
 
-	-- Check for arrow key presses and update player coordinates
-	if pd.buttonJustPressed(pd.kButtonUp) and playerIsNotBlocked(targetX, targetY - 32) then
-		playerY = playerY - 32
-	elseif pd.buttonJustPressed(pd.kButtonDown) and playerIsNotBlocked(targetX, targetY + 32) then
-		playerY = playerY + 32
-	elseif pd.buttonJustPressed(pd.kButtonLeft) and playerIsNotBlocked(targetX - 32, targetY) then
-		playerX = playerX - 32
-	elseif pd.buttonJustPressed(pd.kButtonRight) and playerIsNotBlocked(targetX + 32, targetY) then
-		playerX = playerX + 32
+				-- Visually cover the hole
+				tilemap[tileIndex + 1] = 262 -- plank tile ID
+				tm:setTiles(tilemap, 15)
+
+				-- Remove hole from the list so it doesn't trigger again
+				table.remove(holes, i)
+
+				print("Hole patched with plank!")
+			else
+				print("You fell in the hole! Game over.")
+				-- You can trigger a lose state here
+				playerDead = true -- or reload level, etc.
+			end
+
+			break
+		end
 	end
+end
+
+function pd.update()
+	local screenWidth, screenHeight = pd.display.getSize()
+
+	gfx.setDrawOffset(-player.x + 200, -player.y + 120)
 
 	-- Calculate the difference between the current and target positions
 	local deltaX = playerX - player.x
@@ -179,18 +267,121 @@ function pd.update()
 	local tileY = math.floor(playerY / 32)
 	local tileIndex = tileY * 15 + tileX
 
+	if playerDead then
+		gfx.setDrawOffset(0, 0)
+		gfx.setColor(gfx.kColorBlack)
+		gfx.fillRect(0, screenHeight / 2 - 10, screenWidth, 20)
+
+		gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+		gfx.setColor(gfx.kColorWhite)
+		gfx.drawText("You Died - Press A to Restart", 20, screenHeight / 2 - 5)
+
+		if pd.buttonJustPressed(pd.kButtonA) then
+			playerDead = false
+			buildLevel(levels[currentLevel])
+			playerX, playerY = initPlayerTileX * 32 - 16, initPlayerTileY * 32 - 16
+			player:moveTo(playerX, playerY)
+			inventory = { coins = 0, planks = 0, torches = 0, ladders = 0 }
+		end
+
+		return -- early out so nothing else runs
+	end
+
+	-- Check for level exit
+	for _, v in ipairs(levels[currentLevel].exit) do
+		if v == tileIndex then
+			print("Level complete! Loading next level...")
+			currentLevel = currentLevel + 1
+
+			if currentLevel > #levels then
+				print("You've beaten all levels!")
+				-- Optionally reset to 1, show win screen, etc.
+				currentLevel = 1
+			end
+
+			-- Reset everything
+			buildLevel(levels[currentLevel])
+			playerX, playerY = initPlayerTileX * 32 - 16, initPlayerTileY * 32 - 16
+			player:moveTo(playerX, playerY)
+
+			inventory = {
+				coins = 0,
+				planks = 0,
+				torches = 0,
+				ladders = 0,
+			}
+
+			return -- stop running the rest of the update for this frame
+		end
+	end
+
+	local targetX, targetY = playerX, playerY -- Store the target coordinates
+
+	-- Check for arrow key presses and update player coordinates
+	if pd.buttonJustPressed(pd.kButtonUp) and playerIsNotBlocked(targetX, targetY - 32) then
+		playerY = playerY - 32
+	elseif pd.buttonJustPressed(pd.kButtonDown) and playerIsNotBlocked(targetX, targetY + 32) then
+		playerY = playerY + 32
+	elseif pd.buttonJustPressed(pd.kButtonLeft) and playerIsNotBlocked(targetX - 32, targetY) then
+		playerX = playerX - 32
+	elseif pd.buttonJustPressed(pd.kButtonRight) and playerIsNotBlocked(targetX + 32, targetY) then
+		playerX = playerX + 32
+	end
+
 	-- Check for pickups
 	checkPickupAt(tileIndex, "coins")
 	checkPickupAt(tileIndex, "planks")
 	checkPickupAt(tileIndex, "torches")
 	checkPickupAt(tileIndex, "ladders")
 
+	-- Check for holes
+	checkHole(tileIndex)
+
+	-- Increment darkness timer
+	darknessTimer = darknessTimer + pd.getElapsedTime()
+
+	-- Trigger darkness
+	if not isDark and darknessTimer > darknessThreshold then
+		print("It is now dark...")
+		isDark = true
+	end
+
 	gfx.sprite.update()
 	pd.timer.updateTimers()
 
-	-- === INVENTORY HUD ===
-	local screenWidth, screenHeight = pd.display.getSize()
+	-- Position the darkness sprite
+	if isDark then
+		if torchActive then
+			-- Keep the darkness sprite visible and update its position
+			darknessSprite:setVisible(true)
+			darknessSprite:moveTo(player.x - 200, player.y - 120) -- center around player
+		else
+			-- No torch, just black it all out
+			darknessSprite:setVisible(false)
 
+			gfx.setDrawOffset(0, 0)
+			gfx.setColor(gfx.kColorBlack)
+			gfx.fillRect(0, 0, 400, 240)
+		end
+	else
+		darknessSprite:setVisible(false)
+	end
+
+	if isDark and pd.buttonJustPressed(pd.kButtonA) and inventory.torches > 0 and not torchActive then
+		print("Torch lit!")
+		torchActive = true
+		torchEndTime = pd.getCurrentTimeMilliseconds() + torchDuration
+		inventory.torches = inventory.torches - 1
+	end
+
+	-- Turn off torch after time expires
+	if torchActive and pd.getCurrentTimeMilliseconds() > torchEndTime then
+		-- Turn off torch
+		print("Torch extinguished.")
+		torchActive = false
+	end
+
+	-- === INVENTORY HUD ===
 	-- Save current draw offset
 	local ox, oy = gfx.getDrawOffset()
 
