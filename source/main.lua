@@ -11,6 +11,16 @@ import("levels")
 local pd <const> = playdate
 local gfx <const> = pd.graphics
 
+local font = gfx.font.new("fonts/peridot_7")
+gfx.setFont(font)
+
+inventory = {
+	coins = 0,
+	planks = 0,
+	torches = 0,
+	ladders = 0,
+}
+
 -- Set background to black
 gfx.setColor(gfx.kColorBlack)
 gfx.fillRect(0, 0, 800, 480)
@@ -27,9 +37,9 @@ local player = gfx.sprite.new(playerSprite)
 player:add()
 
 -- Import the tileset
-tilesheet = gfx.imagetable.new("Images/doubletime")
+local tilesheet = gfx.imagetable.new("Images/doubletime")
 
-currentLevel = 1
+local currentLevel = 1
 
 -- Create an empty tilemap
 local tilemap = {}
@@ -123,12 +133,14 @@ function checkPickupAt(tileIndex, type)
 			-- Remove from the level's pickup list
 			table.remove(items, i)
 
-			-- Optional: Custom logic per type
 			if type == "coins" then
-				print("Coin collected!")
-				-- playdate.sound.sampleplayer.new("Sounds/coin.pdm"):play()
+				inventory.coins = inventory.coins + 1
 			elseif type == "planks" then
-				print("Got a plank!")
+				inventory.planks = inventory.planks + 1
+			elseif type == "torches" then
+				inventory.torches = inventory.torches + 1
+			elseif type == "ladders" then
+				inventory.ladders = inventory.ladders + 1
 			end
 
 			break
@@ -175,4 +187,34 @@ function pd.update()
 
 	gfx.sprite.update()
 	pd.timer.updateTimers()
+
+	-- === INVENTORY HUD ===
+	local screenWidth, screenHeight = pd.display.getSize()
+
+	-- Save current draw offset
+	local ox, oy = gfx.getDrawOffset()
+
+	gfx.setDrawOffset(0, 0)
+
+	-- Draw background
+	gfx.setColor(gfx.kColorBlack)
+	gfx.fillRect(screenWidth - 80, screenHeight - 40, 78, 38)
+
+	-- Border
+	gfx.setColor(gfx.kColorWhite)
+	gfx.drawRect(screenWidth - 80, screenHeight - 40, 78, 38)
+
+	-- Text color
+	gfx.setImageDrawMode(gfx.kDrawModeFillWhite)
+	-- gfx.setImageDrawMode(gfx.kDrawModeCopy)
+	gfx.setColor(gfx.kColorWhite)
+
+	-- Draw inventory
+	gfx.drawText("Coins: " .. inventory.coins, screenWidth - 75, screenHeight - 35)
+	gfx.drawText("Torches: " .. inventory.torches, screenWidth - 75, screenHeight - 28)
+	gfx.drawText("Planks: " .. inventory.planks, screenWidth - 75, screenHeight - 21)
+	gfx.drawText("Ladders: " .. inventory.ladders, screenWidth - 75, screenHeight - 14)
+
+	-- Restore original draw offset
+	gfx.setDrawOffset(ox, oy)
 end
