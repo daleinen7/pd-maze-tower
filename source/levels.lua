@@ -131,6 +131,7 @@ levels = {
 		coins = { 16, 142 },
 		exit = { 5 },
 		darkTime = { 60000 },
+		entrance = { 217 },
 	},
 	{
 		name = "Uh Oh, it's dark",
@@ -237,6 +238,7 @@ levels = {
 		coins = { 25, 193 },
 		exit = { 5 },
 		darkTime = { 1000 },
+		entrance = { 217 },
 	},
 	{
 		name = "So many holes!",
@@ -308,6 +310,7 @@ levels = {
 		coins = { 98, 147 },
 		exit = { 5 },
 		darkTime = { 4000 },
+		entrance = { 217 },
 	},
 	{
 		name = "Dooozy!",
@@ -440,6 +443,7 @@ levels = {
 		coins = { 113, 147 },
 		exit = { 5 },
 		darkTime = { 5000 },
+		entrance = { 217 },
 	},
 	{
 		name = "Luqui's Level",
@@ -551,5 +555,6 @@ levels = {
 		coins = { 31, 49, 53, 57, 124, 158, 167, 183 },
 		exit = { 5 },
 		darkTime = { 500 },
+		entrance = { 217 },
 	},
 }

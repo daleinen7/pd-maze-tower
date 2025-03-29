@@ -42,7 +42,8 @@ function buildLevel(level)
 		holes = 302,
 		planks = 262,
 		coins = 219,
-		exit = 850,
+		exit = 451,
+		entrance = 452,
 	}
 
 	-- Create an empty tilemap
@@ -66,6 +67,7 @@ function buildLevel(level)
 	setTiles(level.planks, "planks")
 	setTiles(level.coins, "coins")
 	setTiles(level.exit, "exit")
+	setTiles(level.entrance, "entrance")
 
 	-- Create a tilemap object
 	tm = gfx.tilemap.new()
@@ -102,14 +104,36 @@ function playerIsNotBlocked(x, y, direction)
 	print(tileY)
 	print("---")
 
-	print((tileY - 1) * 15 + tileX)
-
-	print(isValueInTable(((tileY - 1) * 15 + tileX) - 1, levels[currentLevel].walls))
+	-- print(isValueInTable(((tileY - 1) * 15 + tileX) - 1, levels[currentLevel].walls))
 
 	-- print(isValueInTable((tyleY - 1) * 15 + tileX, levels[currentLevel].walls))
 
 	return not isValueInTable(((tileY - 1) * 15 + tileX) - 1, levels[currentLevel].walls)
-	-- return true
+end
+
+function checkPickupAt(tileIndex, type)
+	local items = levels[currentLevel][type]
+
+	for i, v in ipairs(items) do
+		if v == tileIndex then
+			-- Remove tile visually
+			tilemap[tileIndex + 1] = 0
+			tm:setTiles(tilemap, 15)
+
+			-- Remove from the level's pickup list
+			table.remove(items, i)
+
+			-- Optional: Custom logic per type
+			if type == "coins" then
+				print("Coin collected!")
+				-- playdate.sound.sampleplayer.new("Sounds/coin.pdm"):play()
+			elseif type == "planks" then
+				print("Got a plank!")
+			end
+
+			break
+		end
+	end
 end
 
 function pd.update()
@@ -138,6 +162,16 @@ function pd.update()
 
 	-- Update the player's position
 	player:moveTo(player.x, player.y)
+
+	local tileX = math.floor(playerX / 32)
+	local tileY = math.floor(playerY / 32)
+	local tileIndex = tileY * 15 + tileX
+
+	-- Check for pickups
+	checkPickupAt(tileIndex, "coins")
+	checkPickupAt(tileIndex, "planks")
+	checkPickupAt(tileIndex, "torches")
+	checkPickupAt(tileIndex, "ladders")
 
 	gfx.sprite.update()
 	pd.timer.updateTimers()
