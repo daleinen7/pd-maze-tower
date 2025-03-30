@@ -38,7 +38,7 @@ player:add()
 -- Import the tileset
 local tilesheet = gfx.imagetable.new("Images/doubletime")
 
-local currentLevel = 2
+local currentLevel = 1
 
 -- Create an empty tilemap
 local tilemap = {}
@@ -152,6 +152,65 @@ function isWall(tileIndex)
 	return isValueInTable(tileIndex, levels[currentLevel].walls)
 end
 
+function isExterior(tileIndex)
+	return isValueInTable(tileIndex, {
+		0,
+		1,
+		2,
+		3,
+		4,
+		6,
+		7,
+		8,
+		9,
+		10,
+		11,
+		12,
+		13,
+		14,
+		15,
+		29,
+		30,
+		44,
+		45,
+		59,
+		60,
+		74,
+		75,
+		89,
+		90,
+		104,
+		105,
+		119,
+		120,
+		134,
+		135,
+		149,
+		150,
+		164,
+		165,
+		179,
+		180,
+		194,
+		195,
+		209,
+		210,
+		211,
+		212,
+		213,
+		214,
+		215,
+		216,
+		218,
+		219,
+		220,
+		221,
+		222,
+		223,
+		224,
+	})
+end
+
 function isEntrance(tileIndex)
 	return isValueInTable(tileIndex, levels[currentLevel].entrance)
 end
@@ -162,6 +221,10 @@ function playerIsNotBlocked(x, y)
 	local tileIndex = (tileY - 1) * 15 + tileX - 1
 
 	if isEntrance(tileIndex) then
+		return false
+	end
+
+	if isExterior(tileIndex) then
 		return false
 	end
 
@@ -247,6 +310,26 @@ function checkHole(tileIndex)
 	end
 end
 
+function updateDarkness()
+	-- Position the darkness sprite
+	if isDark then
+		if torchActive then
+			-- Keep the darkness sprite visible and update its position
+			darknessSprite:setVisible(true)
+			darknessSprite:moveTo(player.x - 200, player.y - 120) -- center around player
+		else
+			-- No torch, just black it all out
+			darknessSprite:setVisible(false)
+
+			gfx.setDrawOffset(0, 0)
+			gfx.setColor(gfx.kColorBlack)
+			gfx.fillRect(0, 0, 400, 240)
+		end
+	else
+		darknessSprite:setVisible(false)
+	end
+end
+
 function pd.update()
 	local screenWidth, screenHeight = pd.display.getSize()
 
@@ -304,13 +387,6 @@ function pd.update()
 			playerX, playerY = initPlayerTileX * 32 - 16, initPlayerTileY * 32 - 16
 			player:moveTo(playerX, playerY)
 
-			inventory = {
-				coins = 0,
-				planks = 0,
-				torches = 0,
-				ladders = 0,
-			}
-
 			return -- stop running the rest of the update for this frame
 		end
 	end
@@ -349,23 +425,7 @@ function pd.update()
 	gfx.sprite.update()
 	pd.timer.updateTimers()
 
-	-- Position the darkness sprite
-	if isDark then
-		if torchActive then
-			-- Keep the darkness sprite visible and update its position
-			darknessSprite:setVisible(true)
-			darknessSprite:moveTo(player.x - 200, player.y - 120) -- center around player
-		else
-			-- No torch, just black it all out
-			darknessSprite:setVisible(false)
-
-			gfx.setDrawOffset(0, 0)
-			gfx.setColor(gfx.kColorBlack)
-			gfx.fillRect(0, 0, 400, 240)
-		end
-	else
-		darknessSprite:setVisible(false)
-	end
+	updateDarkness()
 
 	if isDark and pd.buttonJustPressed(pd.kButtonA) and inventory.torches > 0 and not torchActive then
 		print("Torch lit!")
