@@ -47,27 +47,20 @@ local darknessSprite = nil
 
 function createDarknessSprite()
 	local width, height = 400, 240 -- Playdate screen size
-	local radius = 60
 
-	-- Make an image that’s solid black
+	-- Default is full blackout image
 	local img = gfx.image.new(width, height)
 	gfx.pushContext(img)
 	gfx.setColor(gfx.kColorBlack)
 	gfx.fillRect(0, 0, width, height)
-
-	-- Cut out a transparent circle in the center
-	gfx.setColor(gfx.kColorClear)
-	gfx.fillCircleAtPoint(width / 2, height / 2, radius)
 	gfx.popContext()
 
-	-- Create sprite
 	darknessSprite = gfx.sprite.new(img)
 	darknessSprite:setCenter(0, 0)
 	darknessSprite:moveTo(0, 0)
-	darknessSprite:setZIndex(1000) -- above the tilemap and player
+	darknessSprite:setZIndex(400) -- Between background and player
+	darknessSprite:setIgnoresDrawOffset(true)
 	darknessSprite:add()
-	darknessSprite:setIgnoresDrawOffset(false)
-	darknessSprite:setVisible(false)
 end
 
 local darknessTimer = 0
@@ -85,6 +78,8 @@ function buildLevel(level)
 
 	player:add()
 	createDarknessSprite()
+
+	player:setZIndex(500)
 
 	darknessTimer = 0
 	darknessThreshold = level.darkTime[1] or 70000
@@ -311,23 +306,34 @@ function checkHole(tileIndex)
 end
 
 function updateDarkness()
-	-- Position the darkness sprite
-	if isDark then
-		if torchActive then
-			-- Keep the darkness sprite visible and update its position
-			darknessSprite:setVisible(true)
-			darknessSprite:moveTo(player.x - 200, player.y - 120) -- center around player
-		else
-			-- No torch, just black it all out
-			darknessSprite:setVisible(false)
-
-			gfx.setDrawOffset(0, 0)
-			gfx.setColor(gfx.kColorBlack)
-			gfx.fillRect(0, 0, 400, 240)
-		end
-	else
+	if not isDark then
 		darknessSprite:setVisible(false)
+		return
 	end
+
+	darknessSprite:setVisible(true)
+
+	local width, height = 400, 240
+	local img = gfx.image.new(width, height)
+	gfx.pushContext(img)
+
+	gfx.setColor(gfx.kColorBlack)
+	gfx.fillRect(0, 0, width, height)
+
+	if torchActive then
+		local radius = 60
+		local flicker = math.random(-3, 3)
+		radius = radius + flicker
+
+		local px, py = 200, 120 -- Center of screen (since we're ignoring draw offset)
+
+		gfx.setColor(gfx.kColorClear)
+		gfx.fillCircleAtPoint(px, py, radius)
+	end
+
+	gfx.popContext()
+
+	darknessSprite:setImage(img)
 end
 
 function pd.update()
