@@ -14,7 +14,7 @@ local gfx <const> = pd.graphics
 local font = gfx.font.new("fonts/peridot_7")
 gfx.setFont(font)
 
-inventory = {
+local inventory = {
 	coins = 0,
 	planks = 0,
 	torches = 0,
@@ -45,7 +45,7 @@ local tilemap = {}
 
 local darknessSprite = nil
 
-function createDarknessSprite()
+local function createDarknessSprite()
 	local width, height = 400, 240 -- Playdate screen size
 
 	-- Default is full blackout image
@@ -58,7 +58,7 @@ function createDarknessSprite()
 	darknessSprite = gfx.sprite.new(img)
 	darknessSprite:setCenter(0, 0)
 	darknessSprite:moveTo(0, 0)
-	darknessSprite:setZIndex(400) -- Between background and player
+	darknessSprite:setZIndex(300) -- Between background and player
 	darknessSprite:setIgnoresDrawOffset(true)
 	darknessSprite:add()
 end
@@ -68,10 +68,24 @@ local darknessThreshold = levels[currentLevel].darkTime[1] or 70000
 local isDark = false
 
 local torchActive = false
-local torchDuration = 5000 -- 5 seconds of light
+local torchDuration = 6000 -- 6 seconds of light
 local torchEndTime = 0
 
-function buildLevel(level)
+local function spawnPickupSprite(tileIndex, tileID, zIndex)
+	local tileX = tileIndex % 15
+	local tileY = math.floor(tileIndex / 15)
+
+	local img = tilesheet:getImage(tileID)
+	local sprite = gfx.sprite.new(img)
+	sprite:setCenter(0, 0)
+	sprite:moveTo(tileX * 32, tileY * 32)
+	sprite:setZIndex(zIndex)
+	sprite:setIgnoresDrawOffset(false)
+	sprite:add()
+	return sprite
+end
+
+local function buildLevel(level)
 	-- Clear previous level sprites
 	gfx.sprite.removeAll()
 	tilemap = {}
@@ -85,6 +99,13 @@ function buildLevel(level)
 	darknessThreshold = level.darkTime[1] or 70000
 	isDark = false
 
+	pickupSprites = {
+		coins = {},
+		torches = {},
+		planks = {},
+		ladders = {},
+	}
+
 	local tilesetKeyTranslation = {
 		walls = 844,
 		torches = 191,
@@ -95,6 +116,26 @@ function buildLevel(level)
 		exit = 451,
 		entrance = 452,
 	}
+
+	for _, tileIndex in ipairs(level.coins) do
+		local sprite = spawnPickupSprite(tileIndex, tilesetKeyTranslation["coins"], 400)
+		table.insert(pickupSprites.coins, { tileIndex = tileIndex, sprite = sprite })
+	end
+
+	for _, tileIndex in ipairs(level.torches) do
+		local sprite = spawnPickupSprite(tileIndex, tilesetKeyTranslation["torches"], 400)
+		table.insert(pickupSprites.torches, { tileIndex = tileIndex, sprite = sprite })
+	end
+
+	for _, tileIndex in ipairs(level.planks) do
+		local sprite = spawnPickupSprite(tileIndex, tilesetKeyTranslation["planks"], 400)
+		table.insert(pickupSprites.planks, { tileIndex = tileIndex, sprite = sprite })
+	end
+
+	for _, tileIndex in ipairs(level.ladders) do
+		local sprite = spawnPickupSprite(tileIndex, tilesetKeyTranslation["ladders"], 400)
+		table.insert(pickupSprites.ladders, { tileIndex = tileIndex, sprite = sprite })
+	end
 
 	-- Create an empty tilemap
 	-- Initialize the tilemap with empty tiles
@@ -111,13 +152,14 @@ function buildLevel(level)
 
 	-- Set the tiles
 	setTiles(level.walls, "walls")
-	setTiles(level.torches, "torches")
-	setTiles(level.ladders, "ladders")
 	setTiles(level.holes, "holes")
-	setTiles(level.planks, "planks")
-	setTiles(level.coins, "coins")
-	setTiles(level.exit, "exit")
-	setTiles(level.entrance, "entrance")
+
+	-- setTiles(level.torches, nil)
+	-- setTiles(level.ladders, nil)
+	-- setTiles(level.exit, nil)
+	-- setTiles(level.planks, nil)
+	-- setTiles(level.coins, nil)
+	-- setTiles(level.entrance, nil)
 
 	-- Create a tilemap object
 	tm = gfx.tilemap.new()
@@ -252,9 +294,18 @@ end
 
 function checkPickupAt(tileIndex, type)
 	local items = levels[currentLevel][type]
+	local sprites = pickupSprites[type]
 
+	if not sprites then
+		print("No sprite list for", type)
+		return
+	end
 	for i, v in ipairs(items) do
 		if v == tileIndex then
+			print("Checking type:", type)
+			print("Sprites table:", pickupSprites[type])
+			print("Picked up:", type, "at tile", tileIndex)
+
 			-- Remove tile visually
 			tilemap[tileIndex + 1] = 0
 			tm:setTiles(tilemap, 15)
@@ -262,14 +313,16 @@ function checkPickupAt(tileIndex, type)
 			-- Remove from the level's pickup list
 			table.remove(items, i)
 
-			if type == "coins" then
-				inventory.coins = inventory.coins + 1
-			elseif type == "planks" then
-				inventory.planks = inventory.planks + 1
-			elseif type == "torches" then
-				inventory.torches = inventory.torches + 1
-			elseif type == "ladders" then
-				inventory.ladders = inventory.ladders + 1
+			-- Update inventory
+			inventory[type] = inventory[type] + 1
+
+			-- Remove matching sprite
+			for j, entry in ipairs(sprites) do
+				if entry.tileIndex == tileIndex then
+					entry.sprite:remove()
+					table.remove(sprites, j)
+					break
+				end
 			end
 
 			break
